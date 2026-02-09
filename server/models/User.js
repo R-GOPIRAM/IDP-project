@@ -1,33 +1,18 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
-const sellerSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    unique: true,
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true, minlength: 6 },
+    role: {
+      type: String,
+      enum: ["customer", "seller", "admin"],
+      default: "customer",
+    },
+    phone: { type: String, trim: true },
   },
-  businessName: { type: String, required: true },
-  businessAddress: { type: String, required: true },
-  businessPhone: { type: String, required: true },
-  gstin: { type: String },
-  panNumber: { type: String },
-  laborDeptCert: { type: String },
-  documents: {
-    aadhaar: String,
-    pan: String,
-    gstin: String,
-    laborCert: String,
-  },
-  verificationStatus: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
-  },
-  rejectionReason: { type: String },
-  approvedAt: { type: Date },
-  rejectedAt: { type: Date },
-  createdAt: { type: Date, default: Date.now },
-});
+  { timestamps: true },
+);
 
-module.exports = mongoose.model('Seller', sellerSchema);
+export default mongoose.model("User", userSchema);

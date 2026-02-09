@@ -1,39 +1,32 @@
-const express = require('express');
-const Review = require('../models/Review');
-const Product = require('../models/Product');
-const Order = require('../models/Order');
-const { auth } = require('../middleware/auth');
+import express from "express";
+import mongoose from "mongoose";
+import Review from "../models/Review.js";
+import Product from "../models/Product.js";
+import Order from "../models/Order.js";
+import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Create review
-router.post('/', auth, async (req, res) => {
+router.post("/", auth, async (req, res) => {
   try {
     const { productId, orderId, rating, title, comment, images } = req.body;
-    
-    // Verify customer purchased the product
+
     const order = await Order.findOne({
       _id: orderId,
       customerId: req.user._id,
-      'items.productId': productId,
-      status: 'delivered'
+      "items.productId": productId,
+      status: "delivered",
     });
-    
+
     if (!order) {
-      return res.status(400).json({ message: 'You can only review products you have purchased and received' });
+      return res.status(400).json({ message: "You can only review products you have purchased and received" });
     }
-    
-    // Check if review already exists
-    const existingReview = await Review.findOne({
-      productId,
-      customerId: req.user._id,
-      orderId
-    });
-    
+
+    const existingReview = await Review.findOne({ productId, customerId: req.user._id, orderId });
     if (existingReview) {
-      return res.status(400).json({ message: 'You have already reviewed this product' });
+      return res.status(400).json({ message: "You have already reviewed this product" });
     }
-    
+
     const review = new Review({
       productId,
       customerId: req.user._id,
@@ -41,125 +34,117 @@ router.post('/', auth, async (req, res) => {
       rating,
       title,
       comment,
-      images: images || []
+      images: images || [],
     });
-    
+
     await review.save();
-    
-    // Update product rating
     await updateProductRating(productId);
-    
+
     res.status(201).json(review);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Get reviews for a product
-router.get('/product/:productId', async (req, res) => {
+router.get("/product/:productId", async (req, res) => {
   try {
-    const { page = 1, limit = 10, sortBy = 'newest' } = req.query;
-    
-    let sort = {};
+    const { page = 1, limit = 10, sortBy = "newest" } = req.query;
+    const parsedPage = Number(page);
+    const parsedLimit = Number(limit);
+
+    const sort = {};
     switch (sortBy) {
-      case 'oldest':
+      case "oldest":
         sort.createdAt = 1;
         break;
-      case 'rating-high':
+      case "rating-high":
         sort.rating = -1;
         break;
-      case 'rating-low':
+      case "rating-low":
         sort.rating = 1;
         break;
-      case 'helpful':
+      case "helpful":
         sort.helpfulVotes = -1;
         break;
       default:
         sort.createdAt = -1;
     }
-    
-    const reviews = await Review.find({
-      productId: req.params.productId,
-      isApproved: true
-    })
-      .populate('customerId', 'name')
+
+    const productId = new mongoose.Types.ObjectId(req.params.productId);
+
+    const reviews = await Review.find({ productId, isApproved: true })
+      .populate("customerId", "name")
       .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    
-    const total = await Review.countDocuments({
-      productId: req.params.productId,
-      isApproved: true
-    });
-    
-    // Get rating distribution
+      .limit(parsedLimit)
+      .skip((parsedPage - 1) * parsedLimit);
+
+    const total = await Review.countDocuments({ productId, isApproved: true });
+
     const ratingStats = await Review.aggregate([
-      { $match: { productId: req.params.productId, isApproved: true } },
-      { $group: { _id: '$rating', count: { $sum: 1 } } },
-      { $sort: { _id: -1 } }
+      { $match: { productId, isApproved: true } },
+      { $group: { _id: "$rating", count: { $sum: 1 } } },
+      { $sort: { _id: -1 } },
     ]);
-    
+
     res.json({
       reviews,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
+      totalPages: Math.ceil(total / parsedLimit),
+      currentPage: parsedPage,
       total,
-      ratingStats
+      ratingStats,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Get user's reviews
-router.get('/my-reviews', auth, async (req, res) => {
+router.get("/my-reviews", auth, async (req, res) => {
   try {
     const reviews = await Review.find({ customerId: req.user._id })
-      .populate('productId', 'name images')
+      .populate("productId", "name images")
       .sort({ createdAt: -1 });
-    
+
     res.json(reviews);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Mark review as helpful
-router.patch('/:id/helpful', auth, async (req, res) => {
+router.patch("/:id/helpful", auth, async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) {
-      return res.status(404).json({ message: 'Review not found' });
+      return res.status(404).json({ message: "Review not found" });
     }
-    
+
     review.helpfulVotes += 1;
     await review.save();
-    
+
     res.json(review);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Helper function to update product rating
 async function updateProductRating(productId) {
+  const normalizedProductId = new mongoose.Types.ObjectId(productId);
   const stats = await Review.aggregate([
-    { $match: { productId, isApproved: true } },
+    { $match: { productId: normalizedProductId, isApproved: true } },
     {
       $group: {
         _id: null,
-        averageRating: { $avg: '$rating' },
-        totalReviews: { $sum: 1 }
-      }
-    }
+        averageRating: { $avg: "$rating" },
+        totalReviews: { $sum: 1 },
+      },
+    },
   ]);
-  
+
   if (stats.length > 0) {
-    await Product.findByIdAndUpdate(productId, {
+    await Product.findByIdAndUpdate(normalizedProductId, {
       rating: Math.round(stats[0].averageRating * 10) / 10,
-      reviewCount: stats[0].totalReviews
+      reviewCount: stats[0].totalReviews,
     });
   }
 }
 
-module.exports = router;
+export default router;
