@@ -1,9 +1,9 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
 const sellerSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: "User",
     required: true,
     unique: true,
   },
@@ -21,8 +21,8 @@ const sellerSchema = new mongoose.Schema({
   },
   verificationStatus: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
+    enum: ["pending", "approved", "rejected"],
+    default: "pending",
   },
   rejectionReason: { type: String },
   approvedAt: { type: Date },
@@ -30,4 +30,4 @@ const sellerSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model('Seller', sellerSchema);
+export default mongoose.model("Seller", sellerSchema);
